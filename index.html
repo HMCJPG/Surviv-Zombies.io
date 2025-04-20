@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Zombie Survival Arena</title>
+  <title>Zombie Survival Arena - Massive Map</title>
   <style>
     canvas {
       background: #22a52f;
@@ -16,14 +16,19 @@
   <button id="restartBtn" style="display:none; margin: 0 auto; display: block; font-size: 20px; padding: 10px 20px;">
     Play Again
   </button>
-  
+
   <script>
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
 
+    const world = {
+      width: 20000,
+      height: 20000
+    };
+
     const player = {
-      x: canvas.width / 2,
-      y: canvas.height / 2,
+      x: world.width / 2,
+      y: world.height / 2,
       radius: 20,
       speed: 3,
       angle: 0,
@@ -32,12 +37,23 @@
 
     const bullets = [];
     const enemies = [];
+    const rocks = [];
+    const rockRadius = 40;
     const bulletSpeed = 6;
     const fireRate = 100;
     let lastShot = 0;
     let isShooting = false;
     let score = 0;
     let gameOver = false;
+
+    // Generate random rocks
+    for (let i = 0; i < 300; i++) {
+      rocks.push({
+        x: Math.random() * world.width,
+        y: Math.random() * world.height,
+        hp: 10
+      });
+    }
 
     const keys = {};
     document.addEventListener('keydown', e => keys[e.key] = true);
@@ -46,7 +62,7 @@
       const rect = canvas.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      player.angle = Math.atan2(my - player.y, mx - player.x);
+      player.angle = Math.atan2(my - canvas.height / 2, mx - canvas.width / 2);
     });
     canvas.addEventListener('mousedown', () => isShooting = true);
     canvas.addEventListener('mouseup', () => isShooting = false);
@@ -56,6 +72,9 @@
       if (keys['s']) player.y += player.speed;
       if (keys['a']) player.x -= player.speed;
       if (keys['d']) player.x += player.speed;
+
+      player.x = Math.max(-1000, Math.min(world.width + 1000, player.x));
+      player.y = Math.max(-1000, Math.min(world.height + 1000, player.y));
     }
 
     function shootBullet() {
@@ -77,26 +96,35 @@
     function spawnEnemy() {
       const edge = Math.floor(Math.random() * 4);
       let x, y;
-      if (edge === 0) { x = Math.random() * canvas.width; y = -30; } // top
-      if (edge === 1) { x = canvas.width + 30; y = Math.random() * canvas.height; } // right
-      if (edge === 2) { x = Math.random() * canvas.width; y = canvas.height + 30; } // bottom
-      if (edge === 3) { x = -30; y = Math.random() * canvas.height; } // left
-      enemies.push({ x, y, radius: 18, speed: 1.2, hp: 3 });
+      if (edge === 0) { x = Math.random() * world.width; y = -30; }
+      if (edge === 1) { x = world.width + 30; y = Math.random() * world.height; }
+      if (edge === 2) { x = Math.random() * world.width; y = world.height + 30; }
+      if (edge === 3) { x = -30; y = Math.random() * world.height; }
+      enemies.push({ x, y, radius: 18, speed: 1.2, hp: 2 });
     }
 
     setInterval(() => {
       if (!gameOver) spawnEnemy();
-    }, 1000); // every 1s
+    }, 1000);
 
     function updateBullets() {
       for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i];
         b.x += b.dx;
         b.y += b.dy;
-
-        // Remove if off-screen
-        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+        if (b.x < -1000 || b.x > world.width + 1000 || b.y < -1000 || b.y > world.height + 1000) {
           bullets.splice(i, 1);
+          continue;
+        }
+        for (let k = rocks.length - 1; k >= 0; k--) {
+          const r = rocks[k];
+          const d = Math.hypot(r.x - b.x, r.y - b.y);
+          if (d < rockRadius + 4) {
+            r.hp--;
+            bullets.splice(i, 1);
+            if (r.hp <= 0) rocks.splice(k, 1);
+            break;
+          }
         }
       }
     }
@@ -107,20 +135,27 @@
         const dx = player.x - e.x;
         const dy = player.y - e.y;
         const dist = Math.hypot(dx, dy);
-        e.x += (dx / dist) * e.speed;
-        e.y += (dy / dist) * e.speed;
 
-        // Check collision with player
+        let blocked = false;
+        for (let r of rocks) {
+          const d = Math.hypot(e.x - r.x, e.y - r.y);
+          if (d < e.radius + rockRadius) {
+            blocked = true;
+            break;
+          }
+        }
+        if (!blocked) {
+          e.x += (dx / dist) * e.speed;
+          e.y += (dy / dist) * e.speed;
+        }
+
         if (dist < e.radius + player.radius) {
           enemies.splice(i, 1);
           player.hp -= 10;
-          if (player.hp <= 0) {
-            gameOver = true;
-          }
+          if (player.hp <= 0) gameOver = true;
           continue;
         }
 
-        // Check collision with bullets
         for (let j = bullets.length - 1; j >= 0; j--) {
           const b = bullets[j];
           const d = Math.hypot(e.x - b.x, e.y - b.y);
@@ -137,30 +172,45 @@
       }
     }
 
-    function drawBullets() {
+    function drawWorldObjects(offsetX, offsetY) {
+      ctx.fillStyle = 'skyblue';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const mapLeft = Math.max(0, -offsetX);
+      const mapTop = Math.max(0, -offsetY);
+      const mapRight = Math.min(world.width - offsetX, canvas.width);
+      const mapBottom = Math.min(world.height - offsetY, canvas.height);
+
+      ctx.fillStyle = '#22a52f';
+      ctx.fillRect(mapLeft, mapTop, mapRight - mapLeft, mapBottom - mapTop);
+
+      rocks.forEach(r => {
+        ctx.beginPath();
+        ctx.arc(r.x - offsetX, r.y - offsetY, rockRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'gray';
+        ctx.fill();
+        ctx.strokeStyle = 'black';
+        ctx.stroke();
+      });
+
       ctx.fillStyle = 'yellow';
       bullets.forEach(b => {
         ctx.beginPath();
-        ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+        ctx.arc(b.x - offsetX, b.y - offsetY, 4, 0, Math.PI * 2);
         ctx.fill();
       });
-    }
 
-    function drawEnemies() {
       enemies.forEach(e => {
         ctx.beginPath();
-        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.arc(e.x - offsetX, e.y - offsetY, e.radius, 0, Math.PI * 2);
         ctx.fillStyle = 'green';
         ctx.fill();
         ctx.strokeStyle = 'black';
-        ctx.lineWidth = 2;
         ctx.stroke();
       });
-    }
 
-    function drawPlayer() {
       ctx.save();
-      ctx.translate(player.x, player.y);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.rotate(player.angle);
       ctx.beginPath();
       ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
@@ -177,6 +227,42 @@
       ctx.restore();
     }
 
+    function drawMinimap() {
+      const mapW = 150, mapH = 150;
+      ctx.fillStyle = '#444';
+      ctx.fillRect(canvas.width - mapW - 20, 20, mapW, mapH);
+      const px = (player.x / world.width) * mapW;
+      const py = (player.y / world.height) * mapH;
+      ctx.fillStyle = 'red';
+      ctx.beginPath();
+      ctx.arc(canvas.width - mapW - 20 + px, 20 + py, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawUI() {
+      ctx.fillStyle = 'red';
+      ctx.fillRect(20, 20, 200, 20);
+      ctx.fillStyle = 'limegreen';
+      ctx.fillRect(20, 20, Math.max(0, 200 * (player.hp / 100)), 20);
+      ctx.strokeStyle = 'black';
+      ctx.strokeRect(20, 20, 200, 20);
+      ctx.fillStyle = 'white';
+      ctx.font = '20px sans-serif';
+      ctx.fillText(`Score: ${score}`, 20, 60);
+      drawMinimap();
+    }
+
+    function drawGameOver() {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = '48px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
+      ctx.font = '28px sans-serif';
+      ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
+    }
+
     if (!CanvasRenderingContext2D.prototype.roundRect) {
       CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
         r = Math.min(r, w / 2, h / 2);
@@ -191,66 +277,37 @@
       };
     }
 
-    function drawUI() {
-      // Health bar
-      ctx.fillStyle = 'red';
-      ctx.fillRect(20, 20, 200, 20);
-      ctx.fillStyle = 'limegreen';
-      ctx.fillRect(20, 20, Math.max(0, 200 * (player.hp / 100)), 20);
-      ctx.strokeStyle = 'black';
-      ctx.strokeRect(20, 20, 200, 20);
-
-      // Score
-      ctx.fillStyle = 'white';
-      ctx.font = '20px sans-serif';
-      ctx.fillText(`Score: ${score}`, 20, 60);
-    }
-
-    function drawGameOver() {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'white';
-      ctx.font = '48px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
-      ctx.font = '28px sans-serif';
-      ctx.fillText(`Score: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
-    }
-
     function gameLoop() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const cameraX = player.x - canvas.width / 2;
+      const cameraY = player.y - canvas.height / 2;
       if (!gameOver) {
         movePlayer();
         if (isShooting) shootBullet();
         updateBullets();
         updateEnemies();
-        drawBullets();
-        drawEnemies();
-        drawPlayer();
+        drawWorldObjects(cameraX, cameraY);
         drawUI();
       } else {
         drawGameOver();
         restartBtn.style.display = 'block';
-
       }
       requestAnimationFrame(gameLoop);
     }
 
     gameLoop();
+
     const restartBtn = document.getElementById('restartBtn');
-
-restartBtn.addEventListener('click', () => {
-  // Reset game state
-  player.hp = 100;
-  player.x = canvas.width / 2;
-  player.y = canvas.height / 2;
-  score = 0;
-  bullets.length = 0;
-  enemies.length = 0;
-  gameOver = false;
-  restartBtn.style.display = 'none';
-});
-
+    restartBtn.addEventListener('click', () => {
+      player.hp = 100;
+      player.x = world.width / 2;
+      player.y = world.height / 2;
+      score = 0;
+      bullets.length = 0;
+      enemies.length = 0;
+      gameOver = false;
+      restartBtn.style.display = 'none';
+    });
   </script>
 </body>
 </html>
