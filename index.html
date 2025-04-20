@@ -30,7 +30,7 @@
       x: world.width / 2,
       y: world.height / 2,
       radius: 20,
-      speed: 3,
+      speed: 2,
       angle: 0,
       hp: 100
     };
@@ -39,8 +39,8 @@
     const enemies = [];
     const rocks = [];
     const rockRadius = 40;
-    const bulletSpeed = 6;
-    const fireRate = 100;
+    const bulletSpeed = 5;
+    const fireRate = 150;
     let lastShot = 0;
     let isShooting = false;
     let score = 0;
@@ -116,7 +116,7 @@
     y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
   }
 
-  enemies.push({ x, y, radius: 25, speed: 1.2, hp: 3 });
+  enemies.push({ x, y, radius: 25, speed: 1.0, hp: 2 });
 }
 
 
