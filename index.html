@@ -51,7 +51,7 @@
       rocks.push({
         x: Math.random() * world.width,
         y: Math.random() * world.height,
-        hp: 10
+        hp: 8
       });
     }
 
@@ -93,15 +93,32 @@
       }
     }
 
+
+    // Fuck me this isn't working
+
+
     function spawnEnemy() {
-      const edge = Math.floor(Math.random() * 4);
-      let x, y;
-      if (edge === 0) { x = Math.random() * world.width; y = -30; }
-      if (edge === 1) { x = world.width + 30; y = Math.random() * world.height; }
-      if (edge === 2) { x = Math.random() * world.width; y = world.height + 30; }
-      if (edge === 3) { x = -30; y = Math.random() * world.height; }
-      enemies.push({ x, y, radius: 18, speed: 1.2, hp: 2 });
-    }
+  const buffer = 400; // how far offscreen they spawn
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
+
+  if (side === 0) { // top
+    x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
+    y = player.y - buffer;
+  } else if (side === 1) { // right
+    x = player.x + buffer;
+    y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
+  } else if (side === 2) { // bottom
+    x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
+    y = player.y + buffer;
+  } else { // left
+    x = player.x - buffer;
+    y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
+  }
+
+  enemies.push({ x, y, radius: 25, speed: 1.2, hp: 3 });
+}
+
 
     setInterval(() => {
       if (!gameOver) spawnEnemy();
