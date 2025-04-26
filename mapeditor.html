@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Zombie Map Editor</title>
+  <style>
+    canvas {
+      border: 2px solid black;
+      display: block;
+      margin: 20px auto;
+      background: #22a52f;
+    }
+    button {
+      display: block;
+      margin: 10px auto;
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="editor" width="1000" height="800"></canvas>
+  <button id="download">Download JSON</button>
+
+  <script>
+    const canvas = document.getElementById('editor');
+    const ctx = canvas.getContext('2d');
+    const TILE_SIZE = 30;
+
+    let rocks = [];
+    let walls = [];
+    let placing = 'rock'; // 'rock' or 'wall'
+    let playerStart = { x: 500, y: 400 };
+
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((e.clientX - rect.left) / TILE_SIZE) * TILE_SIZE;
+      const y = Math.floor((e.clientY - rect.top) / TILE_SIZE) * TILE_SIZE;
+
+      if (placing === 'rock') {
+        rocks.push({ x: x + TILE_SIZE / 2, y: y + TILE_SIZE / 2, hp: 8 });
+      } else if (placing === 'wall') {
+        walls.push({ x, y, width: TILE_SIZE * 2, height: TILE_SIZE });
+      }
+      draw();
+    });
+
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      placing = placing === 'rock' ? 'wall' : 'rock';
+    });
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#22a52f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Player start point
+      ctx.fillStyle = 'red';
+      ctx.beginPath();
+      ctx.arc(playerStart.x, playerStart.y, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rocks
+      rocks.forEach(r => {
+        ctx.fillStyle = 'gray';
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, TILE_SIZE / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      // Walls
+      walls.forEach(w => {
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(w.x, w.y, w.width, w.height);
+        ctx.strokeRect(w.x, w.y, w.width, w.height);
+      });
+
+      ctx.fillStyle = 'black';
+      ctx.font = '16px sans-serif';
+      ctx.fillText(`Mode: ${placing} (right-click to toggle)`, 10, 20);
+    }
+
+    document.getElementById('download').addEventListener('click', () => {
+      const data = {
+        playerStart,
+        rocks,
+        walls
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'custom-map.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    draw();
+  </script>
+</body>
+</html>

@@ -13,11 +13,13 @@
 </head>
 <body>
   <canvas id="game" width="800" height="600"></canvas>
+  <input type="file" id="mapLoader" accept=".json" style="display:block; margin: 10px auto;" />
   <button id="restartBtn" style="display:none; margin: 0 auto; display: block; font-size: 20px; padding: 10px 20px;">
     Play Again
   </button>
-
+  <script src="map-loader.js"></script>
   <script>
+    
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
 
@@ -38,9 +40,10 @@
     const bullets = [];
     const enemies = [];
     const rocks = [];
-    const rockRadius = 40;
+    const walls = [];
+    const rockRadius = 45;
     const bulletSpeed = 5;
-    const fireRate = 150;
+    const fireRate = 500;
     let lastShot = 0;
     let isShooting = false;
     let score = 0;
@@ -53,6 +56,32 @@
         y: Math.random() * world.height,
         hp: 8
       });
+    }
+
+    // Generate random walls
+    for (let i = 0; i < 50; i++) {
+      walls.push({
+        x: Math.random() * world.width,
+        y: Math.random() * world.height,
+        width: Math.random() > 0.5 ? 200 : 40,
+        height: Math.random() > 0.5 ? 40 : 200
+      });
+    }
+
+    function isBlocked(x, y) {
+      for (let r of rocks) {
+        const d = Math.hypot(r.x - x, r.y - y);
+        if (d < rockRadius + player.radius) return true;
+      }
+      for (let w of walls) {
+        if (
+          x + player.radius > w.x &&
+          x - player.radius < w.x + w.width &&
+          y + player.radius > w.y &&
+          y - player.radius < w.y + w.height
+        ) return true;
+      }
+      return false;
     }
 
     const keys = {};
@@ -68,10 +97,15 @@
     canvas.addEventListener('mouseup', () => isShooting = false);
 
     function movePlayer() {
-      if (keys['w']) player.y -= player.speed;
-      if (keys['s']) player.y += player.speed;
-      if (keys['a']) player.x -= player.speed;
-      if (keys['d']) player.x += player.speed;
+      let newX = player.x;
+      let newY = player.y;
+      if (keys['w']) newY -= player.speed;
+      if (keys['s']) newY += player.speed;
+      if (keys['a']) newX -= player.speed;
+      if (keys['d']) newX += player.speed;
+
+      if (!isBlocked(newX, player.y)) player.x = newX;
+      if (!isBlocked(player.x, newY)) player.y = newY;
 
       player.x = Math.max(-1000, Math.min(world.width + 1000, player.x));
       player.y = Math.max(-1000, Math.min(world.height + 1000, player.y));
@@ -93,32 +127,27 @@
       }
     }
 
-
-    // Fuck me this isn't working
-
-
     function spawnEnemy() {
-  const buffer = 400; // how far offscreen they spawn
-  const side = Math.floor(Math.random() * 4);
-  let x, y;
+      const buffer = 400;
+      const side = Math.floor(Math.random() * 4);
+      let x, y;
 
-  if (side === 0) { // top
-    x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
-    y = player.y - buffer;
-  } else if (side === 1) { // right
-    x = player.x + buffer;
-    y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
-  } else if (side === 2) { // bottom
-    x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
-    y = player.y + buffer;
-  } else { // left
-    x = player.x - buffer;
-    y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
-  }
+      if (side === 0) {
+        x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
+        y = player.y - buffer;
+      } else if (side === 1) {
+        x = player.x + buffer;
+        y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
+      } else if (side === 2) {
+        x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
+        y = player.y + buffer;
+      } else {
+        x = player.x - buffer;
+        y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
+      }
 
-  enemies.push({ x, y, radius: 25, speed: 1.0, hp: 2 });
-}
-
+      enemies.push({ x, y, radius: 25, speed: 1.0, hp: 1 });
+    }
 
     setInterval(() => {
       if (!gameOver) spawnEnemy();
@@ -161,6 +190,18 @@
             break;
           }
         }
+        for (let w of walls) {
+          if (
+            e.x + e.radius > w.x &&
+            e.x - e.radius < w.x + w.width &&
+            e.y + e.radius > w.y &&
+            e.y - e.radius < w.y + w.height
+          ) {
+            blocked = true;
+            break;
+          }
+        }
+
         if (!blocked) {
           e.x += (dx / dist) * e.speed;
           e.y += (dy / dist) * e.speed;
@@ -201,6 +242,13 @@
       ctx.fillStyle = '#22a52f';
       ctx.fillRect(mapLeft, mapTop, mapRight - mapLeft, mapBottom - mapTop);
 
+      walls.forEach(w => {
+        ctx.fillStyle = '#8b5a2b';
+        ctx.fillRect(w.x - offsetX, w.y - offsetY, w.width, w.height);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(w.x - offsetX, w.y - offsetY, w.width, w.height);
+      });
+
       rocks.forEach(r => {
         ctx.beginPath();
         ctx.arc(r.x - offsetX, r.y - offsetY, rockRadius, 0, Math.PI * 2);
@@ -210,7 +258,7 @@
         ctx.stroke();
       });
 
-      ctx.fillStyle = 'yellow';
+      ctx.fillStyle = 'orange';
       bullets.forEach(b => {
         ctx.beginPath();
         ctx.arc(b.x - offsetX, b.y - offsetY, 4, 0, Math.PI * 2);
