@@ -41,13 +41,30 @@
     const enemies = [];
     const rocks = [];
     const walls = [];
+    const trees = [];
+
     const rockRadius = 45;
     const bulletSpeed = 5;
     const fireRate = 500;
+    let wave = 1;
+    let zombiesKilled = 0;
+    let zombiesToNextWave = Math.floor(Math.random() * 6) + 10; 
+    let magazineSize = 6;         // 6 shots before reload
+    let bulletsFired = 0;         // how many shots fired since last reload
+    let isReloading = false;      // are we currently reloading
+    let reloadTime = 2000;        // 2 seconds to reload
+    let reloadTimer = 0;          // countdown timer
+
+// Random number between 10 and 15
+
+
     let lastShot = 0;
     let isShooting = false;
     let score = 0;
     let gameOver = false;
+    let waveBannerTimer = 0;
+    let waveBannerText = '';
+
 
     // Generate random rocks
     for (let i = 0; i < 300; i++) {
@@ -68,6 +85,17 @@
       });
     }
 
+    // Generate random trees
+    for (let i = 0; i < 200; i++) { // adjust count if you want
+      trees.push({
+        x: Math.random() * world.width,
+        y: Math.random() * world.height,
+        radius: 240, // <— BIGGER TREES
+        hp: 5
+      });
+    }
+
+
     function isBlocked(x, y) {
       for (let r of rocks) {
         const d = Math.hypot(r.x - x, r.y - y);
@@ -81,6 +109,11 @@
           y - player.radius < w.y + w.height
         ) return true;
       }
+      for (let t of trees) {
+    const d = Math.hypot(t.x - x, t.y - y);
+    if (d < (t.radius * 0.25) + player.radius) return true; 
+    // Only block if inside the TREE STUMP (not the full canopy)
+  }
       return false;
     }
 
@@ -112,42 +145,71 @@
     }
 
     function shootBullet() {
-      const now = Date.now();
-      if (now - lastShot >= fireRate) {
-        const angle = player.angle;
-        const muzzleX = player.x + Math.cos(angle) * (player.radius + 15);
-        const muzzleY = player.y + Math.sin(angle) * (player.radius + 15);
-        bullets.push({
-          x: muzzleX,
-          y: muzzleY,
-          dx: Math.cos(angle) * bulletSpeed,
-          dy: Math.sin(angle) * bulletSpeed
-        });
-        lastShot = now;
-      }
+  const now = Date.now();
+  if (isReloading) return; // 🔥 Can't shoot while reloading
+
+  if (now - lastShot >= fireRate) {
+    const angle = player.angle;
+    const muzzleX = player.x + Math.cos(angle) * (player.radius + 15);
+    const muzzleY = player.y + Math.sin(angle) * (player.radius + 15);
+    bullets.push({
+      x: muzzleX,
+      y: muzzleY,
+      dx: Math.cos(angle) * bulletSpeed,
+      dy: Math.sin(angle) * bulletSpeed
+    });
+    lastShot = now;
+
+    bulletsFired++;
+    if (bulletsFired >= magazineSize) {
+      isReloading = true;
+      reloadTimer = reloadTime; // start reloading
     }
+  }
+}
 
-    function spawnEnemy() {
-      const buffer = 400;
-      const side = Math.floor(Math.random() * 4);
-      let x, y;
+function spawnEnemy() {
+  const buffer = 400;
+  const side = Math.floor(Math.random() * 4);
+  let x, y;
 
-      if (side === 0) {
-        x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
-        y = player.y - buffer;
-      } else if (side === 1) {
-        x = player.x + buffer;
-        y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
-      } else if (side === 2) {
-        x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
-        y = player.y + buffer;
-      } else {
-        x = player.x - buffer;
-        y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
-      }
+  if (side === 0) {
+    x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
+    y = player.y - buffer;
+  } else if (side === 1) {
+    x = player.x + buffer;
+    y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
+  } else if (side === 2) {
+    x = player.x + (Math.random() * canvas.width) - canvas.width / 2;
+    y = player.y + buffer;
+  } else {
+    x = player.x - buffer;
+    y = player.y + (Math.random() * canvas.height) - canvas.height / 2;
+  }
 
-      enemies.push({ x, y, radius: 25, speed: 1.0, hp: 1 });
-    }
+  // 🎲 Randomize enemy type
+  const type = Math.random();
+  let enemy;
+
+  if (type < 0.6) {
+    // Standard zombie
+    enemy = { x, y, radius: 25, speed: 1.0, hp: 1, type: 'basic' };
+  } else if (type < 0.85) {
+    // Fast zombie
+    enemy = { x, y, radius: 20, speed: 2.0, hp: 1, type: 'fast' };
+  } 
+  
+  else if (type < 0.9) {
+    enemy = { x, y, radius:40, speed: 3.0, hp: 0.5, type: 'phantom'}
+  }
+  else {
+    // Tank zombie
+    enemy = { x, y, radius: 35, speed: 0.6, hp: 3, type: 'tank' };
+  }
+
+  enemies.push(enemy);
+}
+
 
     setInterval(() => {
       if (!gameOver) spawnEnemy();
@@ -172,6 +234,20 @@
             break;
           }
         }
+
+        for (let t = trees.length - 1; t >= 0; t--) {
+  const tree = trees[t];
+  const d = Math.hypot(tree.x - b.x, tree.y - b.y);
+  if (d < tree.radius + 4) {
+    tree.hp--;
+    bullets.splice(i, 1);
+    if (tree.hp <= 0) {
+      trees.splice(t, 1);
+    }
+    break;
+  }
+}
+
       }
     }
 
@@ -220,10 +296,21 @@
           if (d < e.radius + 4) {
             e.hp--;
             bullets.splice(j, 1);
+            
             if (e.hp <= 0) {
               enemies.splice(i, 1);
               score += 10;
-            }
+              zombiesKilled++;
+
+              if (zombiesKilled >= zombiesToNextWave) {
+                wave++;
+                zombiesKilled = 0;
+                zombiesToNextWave = Math.floor(Math.random() * 6) + 10; // 10 to 15 zombies randomly
+                waveBannerText = `Wave ${wave} Incoming!`;
+                waveBannerTimer = 120;
+  }
+}
+
             break;
           }
         }
@@ -241,6 +328,40 @@
 
       ctx.fillStyle = '#22a52f';
       ctx.fillRect(mapLeft, mapTop, mapRight - mapLeft, mapBottom - mapTop);
+
+    // 🔥 ADD TREES HERE
+    trees.forEach(t => {
+  const tx = t.x - offsetX;
+  const ty = t.y - offsetY;
+
+  // Tree canopy (light translucent green, bigger)
+  ctx.fillStyle = 'rgba(34, 139, 34, 0.6)';
+  ctx.beginPath();
+  for (let i = 0; i < Math.PI * 2; i += Math.PI / 4) {
+    const radius = t.radius + Math.random() * 5; // bigger wobble based on tree size
+    const x = tx + Math.cos(i) * radius;
+    const y = ty + Math.sin(i) * radius;
+    ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Tree trunk (dark brown)
+  ctx.fillStyle = '#5C4033';
+  ctx.beginPath();
+  ctx.arc(tx, ty, t.radius * 0.25, 0, Math.PI * 2);  // bigger trunk too
+  ctx.fill();
+});
+
+
+    // THEN CONTINUE: walls.forEach(w => { ... })
+    walls.forEach(w => {
+      ctx.fillStyle = '#8b5a2b';
+      ctx.fillRect(w.x - offsetX, w.y - offsetY, w.width, w.height);
+      ctx.strokeStyle = 'black';
+      ctx.strokeRect(w.x - offsetX, w.y - offsetY, w.width, w.height);
+    });
+
 
       walls.forEach(w => {
         ctx.fillStyle = '#8b5a2b';
@@ -265,14 +386,27 @@
         ctx.fill();
       });
 
-      enemies.forEach(e => {
-        ctx.beginPath();
-        ctx.arc(e.x - offsetX, e.y - offsetY, e.radius, 0, Math.PI * 2);
-        ctx.fillStyle = 'green';
-        ctx.fill();
-        ctx.strokeStyle = 'black';
-        ctx.stroke();
-      });
+enemies.forEach(e => {
+  ctx.beginPath();
+  ctx.arc(e.x - offsetX, e.y - offsetY, e.radius, 0, Math.PI * 2);
+  
+  if (e.type === 'fast') {
+    ctx.fillStyle = 'yellow'; // fast zombies = yellow
+  } else if (e.type === 'tank') {
+    ctx.fillStyle = 'purple'; // tank zombies = purple
+  } else if (e.type === 'phantom') {
+    ctx.fillStyle = 'white' // phantom zombie = white 
+  }
+  
+  else {
+    ctx.fillStyle = 'green'; // basic = green
+  }
+
+  ctx.fill();
+  ctx.strokeStyle = 'black';
+  ctx.stroke();
+});
+
 
       ctx.save();
       ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -314,6 +448,23 @@
       ctx.fillStyle = 'white';
       ctx.font = '20px sans-serif';
       ctx.fillText(`Score: ${score}`, 20, 60);
+      ctx.fillText(`Wave: ${wave}`, 20, 90);
+      if (waveBannerTimer > 0) {
+        ctx.fillStyle = 'white';
+        ctx.font = '48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(waveBannerText, canvas.width / 2, canvas.height / 2);
+        
+
+}
+
+if (isReloading) {
+  ctx.fillStyle = 'yellow';
+  ctx.font = '24px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('RELOADING...', canvas.width / 2, canvas.height - 50);
+}
+
       drawMinimap();
     }
 
@@ -347,12 +498,26 @@
       const cameraX = player.x - canvas.width / 2;
       const cameraY = player.y - canvas.height / 2;
       if (!gameOver) {
+
+        if (isReloading) {
+  reloadTimer -= 16; // assuming about 60 fps, so ~16ms per frame
+  if (reloadTimer <= 0) {
+    isReloading = false;
+    bulletsFired = 0; // reset bullets fired
+  }
+}
+
         movePlayer();
         if (isShooting) shootBullet();
         updateBullets();
         updateEnemies();
         drawWorldObjects(cameraX, cameraY);
         drawUI();
+
+        if (waveBannerTimer > 0) {
+          waveBannerTimer--;
+            }
+
       } else {
         drawGameOver();
         restartBtn.style.display = 'block';
@@ -372,6 +537,10 @@
       enemies.length = 0;
       gameOver = false;
       restartBtn.style.display = 'none';
+      if (waveBannerTimer > 0) {
+        waveBannerTimer--;
+}
+
     });
   </script>
 </body>
