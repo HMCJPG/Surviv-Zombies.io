@@ -101,9 +101,10 @@ function broadcast() {
 setInterval(broadcast, 50);
 
 function start(port = PORT) {
-  return server.listen(port, () => {
+  server.listen(port, () => {
     console.log(`Server listening on ${port}`);
   });
+  return server;
 }
 
 if (require.main === module) {
