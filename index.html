@@ -43,6 +43,26 @@
     const walls = [];
     const trees = [];
 
+    let socket;
+    let clientId = null;
+    let remotePlayers = {};
+    function connect() {
+      socket = new WebSocket("ws://localhost:8765");
+      socket.onopen = () => console.log("Connected to server");
+      socket.onclose = () => setTimeout(connect, 1000);
+      socket.onmessage = e => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "world") {
+          clientId = msg.id;
+          remotePlayers = msg.world.players;
+          bullets.length = 0;
+          msg.world.bullets.forEach(b => bullets.push(b));
+          enemies.length = 0;
+          msg.world.zombies.forEach(z => enemies.push(z));
+        }
+      };
+    }
+    connect();
     const rockRadius = 45;
     const bulletSpeed = 5;
     const fireRate = 500;
@@ -424,6 +444,15 @@ enemies.forEach(e => {
       ctx.roundRect(player.radius * 0.5, -5, 30, 10, 4);
       ctx.fill();
       ctx.restore();
+      Object.entries(remotePlayers).forEach(([id, p]) => {
+        if (parseInt(id) === clientId) return;
+        ctx.beginPath();
+        ctx.arc(p.x - offsetX, p.y - offsetY, player.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "blue";
+        ctx.fill();
+        ctx.strokeStyle = "black";
+        ctx.stroke();
+      });
     }
 
     function drawMinimap() {
@@ -513,6 +542,9 @@ if (isReloading) {
         updateEnemies();
         drawWorldObjects(cameraX, cameraY);
         drawUI();
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({type: "state", player, bullets, zombies: enemies}));
+        }
 
         if (waveBannerTimer > 0) {
           waveBannerTimer--;

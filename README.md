@@ -22,3 +22,31 @@ Use **WASD** to move, the mouse to aim and shoot, and press **R** to restart aft
 ## Map Format
 
 Map files are JSON objects with optional `playerStart`, `rocks`, `walls`, and `trees` fields – similar to the structure used by the web version. See `custom-map.json` for an example.
+
+## Multiplayer Server
+
+A simple WebSocket server is provided in `server.js` to synchronize players across clients.
+Start the server with:
+
+```bash
+node server.js
+```
+
+The web version will automatically connect to `ws://localhost:8765` when opened in a browser.
+For the Python version, simply run the game while the server is running:
+
+```bash
+python zombie_survival.py
+```
+
+Multiple clients can connect and see each other's position, bullets and zombies.
+
+### Testing the Server
+
+A basic connectivity test is available:
+
+```bash
+node tests/connect_test.js
+```
+
+This script starts the server and performs a WebSocket handshake to verify it is reachable.

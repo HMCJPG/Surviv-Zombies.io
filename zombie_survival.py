@@ -6,6 +6,7 @@ import os
 import sys
 
 # Screen dimensions
+import socket, base64, hashlib, struct
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 
@@ -18,6 +19,141 @@ BULLET_SPEED = 5
 FIRE_RATE = 500  # milliseconds
 MAGAZINE_SIZE = 6
 RELOAD_TIME = 2000
+
+class WebSocketClient:
+    def __init__(self, host="localhost", port=8765):
+        self.host = host
+        self.port = port
+        self.sock = None
+        self.id = None
+
+    def connect(self):
+        s = socket.create_connection((self.host, self.port))
+        key = base64.b64encode(os.urandom(16)).decode()
+        headers = (
+            f"GET / HTTP/1.1\r\n"
+            f"Host: {self.host}:{self.port}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        s.send(headers.encode())
+        resp = s.recv(1024)
+        if b"101" not in resp:
+            s.close()
+            raise ConnectionError("WebSocket handshake failed")
+        s.setblocking(False)
+        self.sock = s
+
+    def send(self, data):
+        if not self.sock:
+            return
+        payload = json.dumps(data).encode()
+        header = bytearray([0x81])
+        length = len(payload)
+        if length < 126:
+            header.append(length)
+        elif length < 65536:
+            header.append(126)
+            header.extend(struct.pack(">H", length))
+        else:
+            header.append(127)
+            header.extend(struct.pack(">Q", length))
+        self.sock.sendall(header + payload)
+
+    def recv(self):
+        if not self.sock:
+            return None
+        try:
+            first = self.sock.recv(2)
+            if not first:
+                return None
+            _, b2 = first
+            length = b2 & 0x7F
+            if length == 126:
+                length = struct.unpack(">H", self.sock.recv(2))[0]
+            elif length == 127:
+                length = struct.unpack(">Q", self.sock.recv(8))[0]
+            mask = self.sock.recv(4)
+            data = bytearray(self.sock.recv(length))
+            for i in range(length):
+                data[i] ^= mask[i % 4]
+            return json.loads(data.decode())
+        except BlockingIOError:
+            return None
+        except Exception:
+            return None
+    def __init__(self, host="localhost", port=8765):
+        self.host = host
+        self.port = port
+        self.sock = None
+        self.id = None
+
+    def connect(self):
+        s = socket.create_connection((self.host, self.port))
+        key = base64.b64encode(os.urandom(16)).decode()
+        headers = (
+            f"GET / HTTP/1.1
+"
+            f"Host: {self.host}:{self.port}
+"
+            "Upgrade: websocket
+"
+            "Connection: Upgrade
+"
+            f"Sec-WebSocket-Key: {key}
+"
+            "Sec-WebSocket-Version: 13
+
+"
+        )
+        s.send(headers.encode())
+        resp = s.recv(1024)
+        if b"101" not in resp:
+            s.close()
+            raise ConnectionError("WebSocket handshake failed")
+        s.setblocking(False)
+        self.sock = s
+
+    def send(self, data):
+        if not self.sock:
+            return
+        payload = json.dumps(data).encode()
+        header = bytearray([0x81])
+        length = len(payload)
+        if length < 126:
+            header.append(length)
+        elif length < 65536:
+            header.append(126)
+            header.extend(struct.pack(">H", length))
+        else:
+            header.append(127)
+            header.extend(struct.pack(">Q", length))
+        self.sock.sendall(header + payload)
+
+    def recv(self):
+        if not self.sock:
+            return None
+        try:
+            first = self.sock.recv(2)
+            if not first:
+                return None
+            b1, b2 = first
+            length = b2 & 0x7F
+            if length == 126:
+                length = struct.unpack(">H", self.sock.recv(2))[0]
+            elif length == 127:
+                length = struct.unpack(">Q", self.sock.recv(8))[0]
+            mask = self.sock.recv(4)
+            data = bytearray(self.sock.recv(length))
+            for i in range(length):
+                data[i] ^= mask[i % 4]
+            return json.loads(data.decode())
+        except BlockingIOError:
+            return None
+        except Exception:
+            return None
 
 ROCK_RADIUS = 45
 
@@ -100,6 +236,13 @@ def main(map_path=None):
     game_over = False
     spawn_timer = 0
 
+    other_players = {}
+    net = WebSocketClient()
+    try:
+        net.connect()
+    except Exception as e:
+        print("Network disabled:", e)
+        net = None
     def spawn_enemy():
         buffer = 400
         side = random.randint(0, 3)
@@ -165,6 +308,15 @@ def main(map_path=None):
         mx, my = pygame.mouse.get_pos()
         player['angle'] = math.atan2(my - SCREEN_HEIGHT / 2, mx - SCREEN_WIDTH / 2)
 
+        if net:
+            net.send({"type": "state", "player": player, "bullets": bullets, "zombies": enemies})
+            msg = net.recv()
+            if msg and msg.get("type") == "world":
+                other_players = msg["world"]["players"]
+                enemies = msg["world"]["zombies"]
+                bullets = msg["world"]["bullets"]
+                if net.id is None:
+                    net.id = msg["id"]
         if not game_over:
             new_x = player['x']
             new_y = player['y']
@@ -307,6 +459,10 @@ def main(map_path=None):
 
         for b in bullets:
             pygame.draw.circle(screen, (255, 165, 0), (int(b['x'] - camera_x), int(b['y'] - camera_y)), 4)
+        for pid, p in other_players.items():
+            if net and net.id == int(pid):
+                continue
+            pygame.draw.circle(screen, (0, 0, 255), (int(p["x"] - camera_x), int(p["y"] - camera_y)), player["radius"])
 
         for e in enemies:
             color = (0, 255, 0)
@@ -363,3 +519,4 @@ def main(map_path=None):
 if __name__ == '__main__':
     map_file = sys.argv[1] if len(sys.argv) > 1 else None
     main(map_file)
+
